@@ -8,7 +8,7 @@
     <body>
         <div>
             <ul>
-                @foreach ($news as $item)
+                @foreach ($items as $item)
                 <li>{{ $item->description }}</li>
                 @endforeach
             </ul>

@@ -26,6 +26,6 @@ class update extends Command
      */
     public function handle()
     {
-        News::updateDBFromSources();
+        News::updateDB();
     }
 }

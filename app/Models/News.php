@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
+
 class News extends Model
 {
     protected $table = 'news';
@@ -18,35 +19,34 @@ class News extends Model
         'link'
     ];
 
-    public static function getNewsForToday() {
+    public static function getItemsForToday() {
         $news = self::where('created_at', '>=', now()->subDays(1))->get();
         if ($news->isEmpty()) {
-            self::updateDBFromSources();
+            self::updateDB();
             $news = self::where('created_at', '>=', now()->subDays(1))->get();
         }
         return $news;
     }
 
-    public static function updateDBFromSources(): void
+    public static function updateDB(): void
     {
-        self::updateHNNews();
-
-        if (env('TELETEXT_api')) {
+        if (env('TELETEXT_URL')) {
             self::updateTeletextNews();
         }
+        self::updateHNNews();
     }
 
     private static function updateTeletextNews(): void {
         try {
-            $teletextResponse = Http::get(env('TELETEXT_api') .'?app_id=' .env('TELETEXT_app_id') . '&app_key=' .env('TELETEXT_app_key'));
+            $teletextResponse = Http::get(env('TELETEXT_URL') .'?app_id=' .env('TELETEXT_APP_ID') . '&app_key=' .env('TELETEXT_APP_KEY'));
             $teletextResponseJson = $teletextResponse->json();
             $items = $teletextResponseJson['teletext']['page']['subpage'][0]['content'][1]['line'];
             $filteredNews = array_filter($items, fn($item) => key_exists('Text', $item) &&  str_starts_with($item['Text'], '{DH}'));
             $upsertData = array_map(fn($item) => [
-                'description' => str_replace('{DH}', '', $item['Text']),
+                'description' =>  preg_replace('({DH}\d+ )', '', $item['Text']),
                 'source' => 'teletext'
             ], $filteredNews);
-            News::upsert($upsertData, uniqueBy: ['link'], update: ['description']);
+            self::upsert($upsertData, uniqueBy: ['link'], update: ['description']);
         } catch (ConnectionException $e) {
             \Illuminate\Log\log('Failed to fetch teletext news');
         }
@@ -58,11 +58,11 @@ class News extends Model
             $hnFrontPageJson = $hnFrontPageResponse->json();
             $filteredNews = array_filter($hnFrontPageJson['hits'], fn ($item) => $item['num_comments'] > 100);
             $upsertData = array_map(fn ($item) => [
-                'description' => $item['title'] . " (" . $item['num_comments'] . " comments)",
+                'description' => $item['title'],
                 'source' => 'hackernews',
                 'link' => 'https://news.ycombinator.com/item?id=' . $item['story_id']
             ] , $filteredNews);
-            News::upsert($upsertData, uniqueBy: ['link'], update: ['description']);
+            self::upsert($upsertData, uniqueBy: ['link'], update: ['description']);
         } catch (ConnectionException $e) {
             \Illuminate\Log\log('Failed to fetch hn news');
         }
