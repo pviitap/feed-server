@@ -20,32 +20,38 @@ class News extends Model
     ];
 
     public static function getItemsForToday() {
-        $news = self::where('created_at', '>=', now()->subDays(1))->get();
-        if ($news->isEmpty()) {
+        $items = self::where('created_at', '>=', now()->subDays(1))->get();
+        if ($items->isEmpty()) {
             self::updateDB();
-            $news = self::where('created_at', '>=', now()->subDays(1))->get();
+            $items = self::where('created_at', '>=', now()->subDays(1))->get();
         }
-        return $news;
+        return $items;
     }
 
     public static function updateDB(): void
     {
         if (env('TELETEXT_URL')) {
             self::updateTeletextNews();
+        } else {
+            print('TELETEXT_URL is not set');
         }
-        self::updateHNNews();
+        if (env('NEWS_URL')) {
+            self::updateHNNews();
+        } else {
+            print('NEWS_URL is not set');
+        }
     }
 
     private static function updateTeletextNews(): void {
         try {
-            $teletextResponse = Http::get(env('TELETEXT_URL') .'?app_id=' .env('TELETEXT_APP_ID') . '&app_key=' .env('TELETEXT_APP_KEY'));
-            $teletextResponseJson = $teletextResponse->json();
-            $items = $teletextResponseJson['teletext']['page']['subpage'][0]['content'][1]['line'];
-            $filteredNews = array_filter($items, fn($item) => key_exists('Text', $item) &&  str_starts_with($item['Text'], '{DH}'));
+            $response = Http::get(env('TELETEXT_URL') .'?app_id=' .env('TELETEXT_APP_ID') . '&app_key=' .env('TELETEXT_APP_KEY'));
+            $responseJson = $response->json();
+            $items = $responseJson['teletext']['page']['subpage'][0]['content'][1]['line'];
+            $filteredItems = array_filter($items, fn($item) => key_exists('Text', $item) &&  str_starts_with($item['Text'], '{DH}'));
             $upsertData = array_map(fn($item) => [
                 'description' =>  preg_replace('({DH}\d+ )', '', $item['Text']),
                 'source' => 'teletext'
-            ], $filteredNews);
+            ], $filteredItems);
             self::upsert($upsertData, uniqueBy: ['link'], update: ['description']);
         } catch (ConnectionException $e) {
             \Illuminate\Log\log('Failed to fetch teletext news');
@@ -54,14 +60,14 @@ class News extends Model
 
     private static function updateHNNews() {
         try {
-            $hnFrontPageResponse = Http::get('https://hn.algolia.com/api/v1/search?tags=front_page');
-            $hnFrontPageJson = $hnFrontPageResponse->json();
-            $filteredNews = array_filter($hnFrontPageJson['hits'], fn ($item) => $item['num_comments'] > 100);
+            $response = Http::get(env('NEWS_URL'));
+            $responseJson = $response->json();
+            $filteredItems = array_filter($responseJson['hits'], fn ($item) => $item['num_comments'] > 100);
             $upsertData = array_map(fn ($item) => [
                 'description' => $item['title'],
                 'source' => 'hackernews',
                 'link' => 'https://news.ycombinator.com/item?id=' . $item['story_id']
-            ] , $filteredNews);
+            ] , $filteredItems);
             self::upsert($upsertData, uniqueBy: ['link'], update: ['description']);
         } catch (ConnectionException $e) {
             \Illuminate\Log\log('Failed to fetch hn news');

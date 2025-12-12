@@ -8,8 +8,9 @@
         <item>
             <title>{{ $item->key }}</title>
             <description>{{ $item->description }}</description>
-            <dc:creator> {{ $item->source }}</dc:creator>
-            <dc:date> {{ $item-> created_at }}</dc:date>
+            <link>http://localhost:8000/{{ $item->key }}</link>
+            <dc:creator>{{ $item->source }}</dc:creator>
+            <dc:date>{{ $item->created_at }}</dc:date>
         </item>
         @endforeach
     </channel>

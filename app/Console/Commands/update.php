@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\News;
+use App\Models\Event;
 
 class update extends Command
 {
@@ -26,6 +27,7 @@ class update extends Command
      */
     public function handle()
     {
+        Event::updateDB();
         News::updateDB();
     }
 }
