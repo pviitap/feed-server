@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\Http;
 use Date;
 
@@ -19,16 +20,17 @@ class Summary extends Model
     }
 
     public static function updateDB(): void {
-        $news = News::getItemsForToday();
-        self::updateItems($news, 'NEWS');
 
-        $events = Event::getItemsForToday();
-        self::updateItems($events, 'EVENTS');
+        [$r1, $r2, $r3] = Concurrency::run([
+            fn () => self::updateItems(Posting::getItemsForToday(), 'POSTING'),
+            fn () => self::updateItems(News::getItemsForToday(), 'NEWS'),
+            fn () => self::updateItems(Event::getItemsForToday(), 'EVENT')
+        ]);
     }
 
     public static function updateItems(Collection $items, string $type): void {
         $descriptions = $items->pluck('description')->toArray();
-        $response = Http::withHeaders([
+        $response = Http::timeout(60)->withHeaders([
                 'content-type' => 'application/json',
                 'Authorization' => 'Bearer ' . env('COMPLETIONS_KEY')
             ]
@@ -51,5 +53,4 @@ class Summary extends Model
         ]];
         self::upsert($upsertData, uniqueBy: ['key'], update: ['description']);
     }
-
 }

@@ -1,10 +1,13 @@
 <?php
 
 namespace App\Console\Commands;
+use Illuminate\Support\Facades\Concurrency;
 
 use Illuminate\Console\Command;
 use App\Models\News;
+use App\Models\Teletext;
 use App\Models\Event;
+use App\Models\Posting;
 
 class update extends Command
 {
@@ -27,7 +30,11 @@ class update extends Command
      */
     public function handle()
     {
-        Event::updateDB();
-        News::updateDB();
+        [$r1, $r2, $r3, $r4] = Concurrency::run([
+            fn () => Posting::updateDB(),
+            fn () => Event::updateDB(),
+            fn () => TeleText::updateDB(),
+            fn () => News::updateDB()
+        ]);
     }
 }
